@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>語音辨識模型控制</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: black; }
+    canvas { display: block; }
+    #inputContainer {
+      pointer-events: auto;
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+    }
+    #inputBox {
+      font-size: 24px;
+      width: 300px;
+      color: white;
+      background: transparent;
+      border: 1px solid white;
+      padding: 5px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="inputContainer">
+    <input type="text" id="inputBox" placeholder="語音輸入內容...">
+  </div>
+  <audio id="startBeep" src="ding.mp3" preload="auto"></audio>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshNormalMaterial();
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+    camera.position.z = 5;
+
+    // ✅ 支援手勢與鍵盤控制
+    window.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'ArrowLeft': rotateLeft(); break;
+        case 'ArrowRight': rotateRight(); break;
+        case 'ArrowUp': rotateUp(); break;
+        case 'ArrowDown': rotateDown(); break;
+        case 'Enter': playBeepAndStartRecognition(); break;
+      }
+    });
+
+    function rotateLeft() {
+      cube.rotation.y -= 0.1;
+      markUserActive();
+    }
+    function rotateRight() {
+      cube.rotation.y += 0.1;
+      markUserActive();
+    }
+    function rotateUp() {
+      camera.position.z -= 0.5;
+      camera.position.z = Math.max(1, camera.position.z);
+      markUserActive();
+    }
+    function rotateDown() {
+      camera.position.z += 0.5;
+      camera.position.z = Math.min(20, camera.position.z);
+      markUserActive();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 🧠 語音辨識相關
+    let idleTimer;
+    let inputValue = "";
+    let recognition;
+
+    function resetIdleTimer() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (inputValue.trim()) {
+          console.log("⏎ 自動發送：", inputValue);
+          inputValue = "";
+          document.getElementById("inputBox").value = "";
+        }
+      }, 2000);
+    }
+
+    window.markUserActive = function () {
+      resetIdleTimer();
+    };
+
+    window.showRecognizedText = function (text) {
+      const input = document.getElementById("inputBox");
+      input.value = text;
+      inputValue = text;
+      resetIdleTimer();
+
+      if (text.includes("左")) rotateLeft();
+      else if (text.includes("右")) rotateRight();
+      else if (text.includes("前") || text.includes("縮小")) rotateUp();
+      else if (text.includes("後") || text.includes("放大")) rotateDown();
+    };
+
+    function initSpeechRecognition() {
+      if (!('webkitSpeechRecognition' in window)) {
+        alert("此瀏覽器不支援語音辨識");
+        return;
+      }
+      recognition = new webkitSpeechRecognition();
+      recognition.lang = "zh-TW";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = function (event) {
+        const text = event.results[0][0].transcript;
+        showRecognizedText(text);
+      };
+
+      recognition.onerror = function (event) {
+        alert("語音辨識錯誤：" + event.error);
+      };
+    }
+
+    function playBeepAndStartRecognition() {
+      const beep = document.getElementById("startBeep");
+      beep.currentTime = 0;
+      beep.play();
+      if (recognition) {
+        recognition.stop();
+        recognition.start();
+      }
+    }
+
+    window.onload = function () {
+      initSpeechRecognition();
+    };
+  </script>
+</body>
+</html>
